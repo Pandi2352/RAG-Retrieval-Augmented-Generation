@@ -9,14 +9,36 @@ const ASSET_EXCLUDE = [
   /\.(pdf|zips?|docx?|xlsx?|pptx?|csv|rtf|odt|png|jpe?g|gif|svg|webp|bmp|ico|mp4|webm|mp3|wav|woff2?|ttf|eot|css|js|json|xml|rss|zip|rar|7z|tar|gz)(\?.*)?$/i,
 ]
 
-// Classify a link the crawler won't follow, with a human reason. Returns null
-// for same-host HTML pages (those get crawled) and un-actionable links.
+// File extensions whose text `extractText` can actually read.
+const SUPPORTED_IMPORT_EXTS = new Set(['pdf', 'docx', 'doc', 'csv', 'txt', 'md'])
+// UI "File Types" → extensions.
+const TYPE_TO_EXTS = {
+  PDF: ['pdf'],
+  DOCX: ['docx', 'doc'],
+  CSV: ['csv'],
+  TXT: ['txt', 'md'],
+}
+
+// Which extensions to import: blank selection ⇒ every supported type.
+function resolveImportExts(fileTypes) {
+  if (!fileTypes || !fileTypes.length) return new Set(SUPPORTED_IMPORT_EXTS)
+  const set = new Set()
+  for (const t of fileTypes) {
+    for (const e of TYPE_TO_EXTS[String(t).toUpperCase()] || []) {
+      if (SUPPORTED_IMPORT_EXTS.has(e)) set.add(e)
+    }
+  }
+  return set
+}
+
+// Classify a link the crawler won't follow, with a human reason + kind.
+// Returns null for same-host HTML pages (crawled) and un-actionable links.
 function classifyLink(href, base, startHost) {
   if (!href) return null
   const h = href.trim()
   if (!h || h.startsWith('#')) return null
-  if (/^mailto:/i.test(h)) return { url: h, reason: 'email link' }
-  if (/^tel:/i.test(h)) return { url: h, reason: 'phone link' }
+  if (/^mailto:/i.test(h)) return { url: h, reason: 'email link', kind: 'contact' }
+  if (/^tel:/i.test(h)) return { url: h, reason: 'phone link', kind: 'contact' }
   if (/^(javascript:|data:)/i.test(h)) return null
   let abs
   try {
@@ -25,10 +47,11 @@ function classifyLink(href, base, startHost) {
     return null
   }
   if (abs.protocol !== 'http:' && abs.protocol !== 'https:') return null
-  if (abs.hostname !== startHost) return { url: abs.href, reason: 'external site' }
+  if (abs.hostname !== startHost) return { url: abs.href, reason: 'external site', kind: 'external' }
   if (ASSET_EXCLUDE.some((re) => re.test(abs.pathname))) {
-    const ext = abs.pathname.match(/\.([a-z0-9]+)$/i)
-    return { url: abs.href, reason: ext ? `file (${ext[1].toLowerCase()})` : 'file' }
+    const m = abs.pathname.match(/\.([a-z0-9]+)$/i)
+    const ext = m ? m[1].toLowerCase() : ''
+    return { url: abs.href, reason: ext ? `file (${ext})` : 'file', kind: 'file', ext }
   }
   return null // same-host HTML page → crawled, not skipped
 }
@@ -57,6 +80,7 @@ export async function crawlWebsite(
     requestDelayMs = null,
     respectRobots = true,
     jsRendering = false,
+    fileTypes = null,
   },
   onProgress
 ) {
@@ -66,6 +90,9 @@ export async function crawlWebsite(
   const pages = []
   const skipped = []
   const skippedSeen = new Set()
+  const files = []
+  const fileSeen = new Set()
+  const importExts = resolveImportExts(fileTypes)
   const startHost = new URL(startUrl).hostname
   const pageCap = maxPages && maxPages > 0 ? maxPages : DEFAULT_PAGE_CAP
 
@@ -87,9 +114,16 @@ export async function crawlWebsite(
     // often contain the links we want to report (e.g. a header "Download" PDF).
     $('a[href]').each((_, el) => {
       const item = classifyLink($(el).attr('href'), request.url, startHost)
-      if (item && !skippedSeen.has(item.url)) {
+      if (!item) return
+      // Importable file of a selected type → queue for download/extraction.
+      if (item.kind === 'file' && importExts.has(item.ext)) {
+        if (!fileSeen.has(item.url)) {
+          fileSeen.add(item.url)
+          files.push({ url: item.url, ext: item.ext })
+        }
+      } else if (!skippedSeen.has(item.url)) {
         skippedSeen.add(item.url)
-        skipped.push(item)
+        skipped.push({ url: item.url, reason: item.reason })
       }
     })
 
@@ -138,5 +172,5 @@ export async function crawlWebsite(
   }
 
   await crawler.run([{ url: startUrl, userData: { depth: 0 } }])
-  return { pages, skipped }
+  return { pages, skipped, files }
 }

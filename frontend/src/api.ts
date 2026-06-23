@@ -24,10 +24,12 @@ export interface CrawlPayload {
   url: string
   maxDepth?: number | null
   maxPages?: number | null
+  maxFileSize?: number | null
   concurrency?: number | null
   requestDelay?: number | null
   respectRobots?: boolean
   jsRendering?: boolean
+  fileTypes?: string[]
 }
 
 export async function crawlWebsite(payload: CrawlPayload) {

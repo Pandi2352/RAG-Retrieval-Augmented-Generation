@@ -27,7 +27,7 @@ export async function uploadDocuments(req, res, next) {
 // POST /api/documents/crawl   { url, maxDepth?, maxPages?, concurrency?, requestDelay?, respectRobots? }
 export async function crawlWebsiteDocument(req, res, next) {
   try {
-    const { url, maxDepth, maxPages, concurrency, requestDelay, respectRobots, jsRendering } =
+    const { url, maxDepth, maxPages, maxFileSize, concurrency, requestDelay, respectRobots, jsRendering, fileTypes } =
       req.body || {}
     if (!url || !/^https?:\/\//i.test(url.trim())) {
       return res.status(400).json({ error: 'A valid http(s) URL is required' })
@@ -38,10 +38,12 @@ export async function crawlWebsiteDocument(req, res, next) {
       options: {
         maxDepth: num(maxDepth),
         maxPages: num(maxPages),
+        maxFileSizeMb: num(maxFileSize),
         concurrency: num(concurrency),
         requestDelayMs: num(requestDelay),
         respectRobots: respectRobots !== false,
         jsRendering: !!jsRendering,
+        fileTypes: Array.isArray(fileTypes) ? fileTypes : null,
       },
     })
     res.status(201).json({ document: doc })

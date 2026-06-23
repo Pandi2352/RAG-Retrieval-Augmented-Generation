@@ -1,7 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Source } from '../types'
 
-export function Sources({ sources }: { sources: Source[] }) {
+export function Sources({
+  sources,
+  highlight,
+}: {
+  sources: Source[]
+  highlight?: { n: number; k: number } | null
+}) {
   if (!sources?.length) return null
 
   // Global accordion toggle state (starts closed for clean chat UI)
@@ -38,6 +44,26 @@ export function Sources({ sources }: { sources: Source[] }) {
     setCopiedId(n)
     setTimeout(() => setCopiedId(null), 1500)
   }
+
+  // When a citation is clicked, open the accordion, expand & flash that source.
+  const itemRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const [flashN, setFlashN] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!highlight) return
+    setGlobalOpen(true)
+    setOpenIds((prev) => new Set(prev).add(highlight.n))
+    const t1 = setTimeout(() => {
+      itemRefs.current[highlight.n]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setFlashN(highlight.n)
+    }, 60)
+    const t2 = setTimeout(() => setFlashN(null), 1800)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight?.k])
 
   return (
     <div className="mt-3 border-t border-slate-200/80 dark:border-slate-700 pt-3">
@@ -84,7 +110,12 @@ export function Sources({ sources }: { sources: Source[] }) {
               return (
                 <div
                   key={s.n}
+                  ref={(el) => {
+                    itemRefs.current[s.n] = el
+                  }}
                   className={`rounded-md border text-sm transition duration-200 ${
+                    flashN === s.n ? 'ring-2 ring-indigo-400 ring-offset-1 dark:ring-offset-slate-900 ' : ''
+                  }${
                     isOpen
                       ? 'border-indigo-100 bg-indigo-50/10 dark:border-indigo-500/40 dark:bg-indigo-500/10'
                       : 'border-slate-200 bg-slate-50/40 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40 dark:hover:bg-slate-800'

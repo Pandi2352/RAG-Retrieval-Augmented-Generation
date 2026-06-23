@@ -146,16 +146,51 @@ export async function ingestWebsite({ url, options = {} }) {
 
 async function processBackgroundCrawl(docId, url, options, filename) {
   try {
-    const { pages, skipped } = await crawlWebsite({ startUrl: url, ...options }, (step) =>
+    const { pages, skipped, files } = await crawlWebsite({ startUrl: url, ...options }, (step) =>
       setStatus(docId, { statusStep: step })
     )
-    if (skipped?.length) await setStatus(docId, { skippedUrls: skipped })
-    if (!pages.length) throw new Error('No pages crawled or no readable text found')
 
-    // Combine pages, prefixing each with its source URL so answers can cite it.
-    const text = pages
+    // Combine crawled pages, prefixing each with its source URL for citation.
+    let text = pages
       .map((p) => `Source: ${p.url}\n${p.title ? p.title + '\n' : ''}${p.text}`)
       .join('\n\n----\n\n')
+
+    // Download & extract the linked files of selected types (respecting size).
+    const importFailures = []
+    const maxBytes =
+      options.maxFileSizeMb && options.maxFileSizeMb > 0
+        ? options.maxFileSizeMb * 1024 * 1024
+        : Infinity
+
+    for (let i = 0; i < (files?.length || 0); i++) {
+      const f = files[i]
+      await setStatus(docId, { statusStep: `Importing files (${i + 1}/${files.length})…` })
+      try {
+        const res = await fetch(f.url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const buf = Buffer.from(await res.arrayBuffer())
+        if (buf.length > maxBytes) {
+          importFailures.push({ url: f.url, reason: 'file too large' })
+          continue
+        }
+        const fname = decodeURIComponent(f.url.split('/').pop().split('?')[0]) || `file.${f.ext}`
+        const fileText = await extractText(buf, res.headers.get('content-type') || '', fname)
+        if (fileText && fileText.trim()) {
+          text += `\n\n----\n\nSource: ${f.url}\n${fileText}`
+        } else {
+          importFailures.push({ url: f.url, reason: 'no text extracted' })
+        }
+      } catch (err) {
+        console.warn(`[ingestService] file import failed ${f.url}: ${err.message}`)
+        importFailures.push({ url: f.url, reason: 'import failed' })
+      }
+    }
+
+    // Persist the final skipped list (un-followed links + failed imports).
+    const allSkipped = [...(skipped || []), ...importFailures]
+    if (allSkipped.length) await setStatus(docId, { skippedUrls: allSkipped })
+
+    if (!text.trim()) throw new Error('No readable content found on the site')
 
     await processExtractedText(docId, filename, text)
   } catch (err) {

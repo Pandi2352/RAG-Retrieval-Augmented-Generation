@@ -29,7 +29,8 @@ A full-stack **RAG (Retrieval-Augmented Generation)** application. Upload PDFs, 
 - **Multi-file upload** — drag-and-drop several files at once (PDF · DOCX · TXT · MD · CSV · JSON)
 - **🌐 Website crawling** — paste a URL and crawl the site into a document. Same-hostname pages, with depth / page / concurrency / delay limits and **robots.txt** respect. (Crawlee)
   - **JavaScript Rendering toggle** — static HTML by default (fast), or headless **Chromium** for JS-heavy SPAs (React/Vue/…)
-  - **Skipped URLs** — files (PDF/zip/…), external sites, and email/phone links are listed with a reason
+  - **Linked-file import** — downloads linked **PDF / DOCX / CSV** files (by selected type, within a max size) and ingests their text alongside the page content
+  - **Skipped URLs** — anything not pulled in (other file types, external sites, email/phone links, oversized/failed imports) is listed with a reason
 - **🔍 Smart PDF extraction** — tries the **embedded text layer first** (instant); falls back to **Ollama Vision OCR** only for scanned/image PDFs
 - **Background processing** with **live status steps** (`Extracting / Crawling → Embeddings → Storing → Ready`)
 - **Document manager** — see status, chunk counts, delete, and **scope the chat** to specific documents
@@ -38,7 +39,7 @@ A full-stack **RAG (Retrieval-Augmented Generation)** application. Upload PDFs, 
 ### 🧠 RAG & Retrieval
 - **Query rewriting** — turns follow-up questions into standalone search queries using conversation context
 - **Semantic search** over Qdrant with **score-threshold filtering** (drops weak matches)
-- **Source attribution** — every answer cites its sources as superscript `[1]` badges
+- **Source attribution** — every answer cites its sources as **clickable** superscript `[1]` badges → click to open, expand, and flash the exact source
 - **Source cards** — expandable per-source view with filename, similarity score, and snippet
 - **In-process embeddings** — `all-MiniLM-L6-v2` via `transformers.js` (no external embedding service to run)
 
@@ -246,12 +247,16 @@ ollama-rag/
 
 Ideas on deck (see `RAG_OPTIMIZATION.md` for the full 50-point checklist):
 
-- [ ] 📥 **Crawl file-type import** — download linked PDFs/DOCX/etc. (the "Skipped" files) and ingest their contents too
-- [ ] 🔗 **Clickable citations** → open & highlight the exact chunk / PDF page
+- [ ] 🔐 **Authentication + per-user isolation** — scope documents & conversations by owner
+- [ ] 🔔 **Error toasts** — surface upload/crawl/network failures in the UI
+- [ ] 📱 **Mobile-responsive layout** — drawer sidebar + bottom sheets
 - [ ] 🔀 **Hybrid search** (dense + BM25) + **cross-encoder reranking**
 - [ ] 🟢 **Groundedness / trust badge** (answer-vs-sources self-check)
+- [ ] 🗂️ **Projects / Workspaces** — group docs + chats + custom instructions
 - [ ] 🪪 **Smart Document Cards** — auto-extract structured fields + cross-document consistency checks
 - [ ] 🔒 **Privacy mode** — detect & mask PII
+
+**Done recently:** ✅ Website crawling (static + JS rendering) · ✅ linked-file import · ✅ clickable citations · ✅ Document Radar · ✅ read-aloud + translate · ✅ dark mode
 
 ---
 

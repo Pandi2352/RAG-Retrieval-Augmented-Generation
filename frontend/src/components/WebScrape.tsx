@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { crawlWebsite } from '../api'
 
 const FILE_TYPES = ['PDF', 'DOCX', 'XLSX', 'PPTX', 'CSV', 'IMAGE', 'ZIP']
+// Types whose text we can actually extract today.
+const SUPPORTED_TYPES = new Set(['PDF', 'DOCX', 'CSV'])
 
 const inputCls =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500'
@@ -24,6 +26,10 @@ export function WebScrape({ onCrawlStarted }: { onCrawlStarted: () => void }) {
   const [requestDelay, setRequestDelay] = useState('')
   const [respectRobots, setRespectRobots] = useState(true)
   const [jsRendering, setJsRendering] = useState(false)
+  const [fileTypes, setFileTypes] = useState<string[]>([])
+
+  const toggleFileType = (t: string) =>
+    setFileTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
 
   const reset = () => {
     setUrl('')
@@ -34,6 +40,7 @@ export function WebScrape({ onCrawlStarted }: { onCrawlStarted: () => void }) {
     setRequestDelay('')
     setRespectRobots(true)
     setJsRendering(false)
+    setFileTypes([])
     setShowAdvanced(false)
     setError(null)
     setUrlValid(null)
@@ -70,10 +77,12 @@ export function WebScrape({ onCrawlStarted }: { onCrawlStarted: () => void }) {
         url: url.trim(),
         maxDepth: num(maxDepth),
         maxPages: num(maxPages),
+        maxFileSize: num(maxFileSize),
         concurrency: num(concurrency),
         requestDelay: num(requestDelay),
         respectRobots,
         jsRendering,
+        fileTypes: fileTypes.filter((t) => SUPPORTED_TYPES.has(t)),
       })
       onCrawlStarted()
       setOpen(false)
@@ -180,24 +189,44 @@ export function WebScrape({ onCrawlStarted }: { onCrawlStarted: () => void }) {
                     <input value={requestDelay} onChange={(e) => setRequestDelay(e.target.value)} type="number" min={0} placeholder="No delay" className={inputCls} />
                     <p className={hintCls}>Pause between requests. Blank = as fast as possible.</p>
                   </div>
-                  <div className="opacity-60">
+                  <div>
                     <label className={labelCls}>Max File Size (MB)</label>
-                    <input value={maxFileSize} onChange={(e) => setMaxFileSize(e.target.value)} type="number" min={1} placeholder="No limit" className={inputCls} disabled />
-                    <p className={hintCls}>For file imports (coming soon).</p>
+                    <input value={maxFileSize} onChange={(e) => setMaxFileSize(e.target.value)} type="number" min={1} placeholder="No limit" className={inputCls} />
+                    <p className={hintCls}>Linked files larger than this are skipped. Blank = any size.</p>
                   </div>
                 </div>
 
-                {/* File types (placeholder — HTML crawl only for now) */}
-                <div className="opacity-60">
+                {/* File types — linked files of these types are downloaded & ingested */}
+                <div>
                   <label className={labelCls}>File Types to Import</label>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {FILE_TYPES.map((t) => (
-                      <span key={t} className="rounded-md border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-600 dark:text-slate-400">
-                        {t}
-                      </span>
-                    ))}
+                    {FILE_TYPES.map((t) => {
+                      const supported = SUPPORTED_TYPES.has(t)
+                      const on = fileTypes.includes(t)
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          disabled={!supported}
+                          onClick={() => supported && toggleFileType(t)}
+                          title={supported ? '' : 'Coming soon'}
+                          className={`rounded-md border px-2 py-0.5 text-[10px] font-medium transition ${
+                            !supported
+                              ? 'cursor-not-allowed border-slate-200 text-slate-300 dark:border-slate-700 dark:text-slate-600'
+                              : on
+                                ? 'border-indigo-500 bg-indigo-600 text-white'
+                                : 'border-slate-300 text-slate-500 hover:border-indigo-300 dark:border-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {t}
+                          {!supported && <span className="ml-0.5 opacity-70">·soon</span>}
+                        </button>
+                      )
+                    })}
                   </div>
-                  <p className={hintCls}>Binary-file import is coming soon — for now the crawler reads page text (HTML).</p>
+                  <p className={hintCls}>
+                    Linked files of selected types are downloaded and their text ingested. Leave empty = all supported types (PDF, DOCX, CSV).
+                  </p>
                 </div>
 
                 {/* Robots */}

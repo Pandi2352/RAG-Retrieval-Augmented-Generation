@@ -1,6 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '../types'
 import { Sources } from './Sources'
+
+// Lets the inline [n] citation badges trigger the bubble's source-highlight
+// handler without threading a callback through every markdown helper.
+const CiteContext = createContext<((n: number) => void) | null>(null)
+
+function Citation({ n }: { n: number }) {
+  const onCite = useContext(CiteContext)
+  const cls =
+    'mx-0.5 rounded bg-indigo-50 px-1 py-0.5 align-super text-[9px] font-semibold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300'
+  if (!onCite) return <sup className={cls}>{n}</sup>
+  return (
+    <button type="button" onClick={() => onCite(n)} className={`${cls} cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/40`} title="Jump to source">
+      {n}
+    </button>
+  )
+}
 
 const TRANSLATE_LANGS = ['English', 'Tamil', 'Hindi', 'Spanish', 'French']
 
@@ -77,16 +93,9 @@ function formatInlineText(text: string): React.ReactNode[] {
   const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|\[\d+\])/g
   const parts = text.split(regex)
   return parts.map((part, i) => {
-    // Citation marker like [1] → small superscript badge.
+    // Citation marker like [1] → clickable superscript badge (jumps to source).
     if (/^\[\d+\]$/.test(part)) {
-      return (
-        <sup
-          key={i}
-          className="mx-0.5 rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-semibold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
-        >
-          {part.slice(1, -1)}
-        </sup>
-      )
+      return <Citation key={i} n={Number(part.slice(1, -1))} />
     }
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
@@ -298,6 +307,8 @@ export function MessageBubble({ msg, streaming, onRegenerate, onFeedback, onAsk,
   const isUser = msg.role === 'user'
   const [copied, setCopied] = useState(false)
   const [showSources, setShowSources] = useState(false)
+  // Citation click → open & highlight a source (k bumps to re-trigger same n).
+  const [cite, setCite] = useState<{ n: number; k: number } | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(msg.content)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -387,6 +398,12 @@ export function MessageBubble({ msg, streaming, onRegenerate, onFeedback, onAsk,
     return () => document.removeEventListener('mousedown', onDocDown)
   }, [langOpen])
 
+  const handleCite = (n: number) => {
+    if (!msg.sources?.length || n < 1 || n > msg.sources.length) return
+    setShowSources(true)
+    setCite((c) => ({ n, k: (c?.k || 0) + 1 }))
+  }
+
   const hasSources = !isUser && !!msg.sources?.length
   // Action bar appears under completed assistant answers only.
   const showActions = !isUser && !!msg.content && !streaming
@@ -444,7 +461,11 @@ export function MessageBubble({ msg, streaming, onRegenerate, onFeedback, onAsk,
             onMouseUp={onContentMouseUp}
             className={`leading-relaxed ${!isUser ? 'text-xs text-slate-650 dark:text-slate-300 space-y-1' : 'text-sm whitespace-pre-wrap'}`}
           >
-            {isUser ? msg.content : parseMarkdown(msg.content)}
+            {isUser ? (
+              msg.content
+            ) : (
+              <CiteContext.Provider value={handleCite}>{parseMarkdown(msg.content)}</CiteContext.Provider>
+            )}
             {streaming && <span className="ml-0.5 inline-block animate-pulse">▋</span>}
           </div>
         )}
@@ -632,7 +653,7 @@ export function MessageBubble({ msg, streaming, onRegenerate, onFeedback, onAsk,
           </div>
         )}
 
-        {hasSources && showSources && <Sources sources={msg.sources!} />}
+        {hasSources && showSources && <Sources sources={msg.sources!} highlight={cite} />}
       </div>
 
       {/* Footer: timestamp + (user) edit/delete on hover */}
