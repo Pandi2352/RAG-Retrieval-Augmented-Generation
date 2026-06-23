@@ -3,6 +3,9 @@ export interface DocumentMeta {
   filename: string
   mimeType?: string
   size?: number
+  source?: 'upload' | 'web'
+  sourceUrl?: string
+  skippedUrls?: { url: string; reason: string }[]
   status: 'processing' | 'ready' | 'failed'
   statusStep?: string
   suggestedQuestions?: string[]

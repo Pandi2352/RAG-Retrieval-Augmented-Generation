@@ -8,6 +8,7 @@ import {
 } from './api'
 import type { DocumentMeta, Conversation } from './types'
 import { FileUpload } from './components/FileUpload'
+import { WebScrape } from './components/WebScrape'
 import { DocumentList } from './components/DocumentList'
 import { ConversationList } from './components/ConversationList'
 import { Chat } from './components/Chat'
@@ -162,6 +163,7 @@ export default function App() {
         />
 
         <FileUpload onUploaded={refresh} />
+        <WebScrape onCrawlStarted={refresh} />
         <div className="mt-2 flex-1 overflow-y-auto">
           <DocumentList
             documents={documents}

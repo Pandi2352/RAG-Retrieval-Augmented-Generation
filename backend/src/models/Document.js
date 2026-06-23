@@ -5,6 +5,12 @@ const documentSchema = new mongoose.Schema(
     filename: { type: String, required: true },
     mimeType: { type: String },
     size: { type: Number },
+    source: { type: String, enum: ['upload', 'web'], default: 'upload' },
+    sourceUrl: { type: String },
+    skippedUrls: {
+      type: [{ _id: false, url: { type: String }, reason: { type: String } }],
+      default: [],
+    },
     status: {
       type: String,
       enum: ['processing', 'ready', 'failed'],

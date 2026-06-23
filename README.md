@@ -27,8 +27,11 @@ A full-stack **RAG (Retrieval-Augmented Generation)** application. Upload PDFs, 
 
 ### 📄 Documents & Ingestion
 - **Multi-file upload** — drag-and-drop several files at once (PDF · DOCX · TXT · MD · CSV · JSON)
-- **🔍 Vision OCR for PDFs** — scanned/image PDFs are converted to images and transcribed by an **Ollama vision model**, so even non-text PDFs work
-- **Background processing** with **live status steps** (`Extracting → OCR page N → Embeddings → Storing → Ready`)
+- **🌐 Website crawling** — paste a URL and crawl the site into a document. Same-hostname pages, with depth / page / concurrency / delay limits and **robots.txt** respect. (Crawlee)
+  - **JavaScript Rendering toggle** — static HTML by default (fast), or headless **Chromium** for JS-heavy SPAs (React/Vue/…)
+  - **Skipped URLs** — files (PDF/zip/…), external sites, and email/phone links are listed with a reason
+- **🔍 Smart PDF extraction** — tries the **embedded text layer first** (instant); falls back to **Ollama Vision OCR** only for scanned/image PDFs
+- **Background processing** with **live status steps** (`Extracting / Crawling → Embeddings → Storing → Ready`)
 - **Document manager** — see status, chunk counts, delete, and **scope the chat** to specific documents
 - **Source text / OCR viewer** — inspect the extracted chunks per document
 
@@ -78,7 +81,8 @@ A full-stack **RAG (Retrieval-Augmented Generation)** application. Upload PDFs, 
 
 **Ingestion pipeline**
 ```
-Upload ─▶ extract text (Vision OCR / mammoth / plain)
+Upload ─▶ extract text (PDF text-layer → Vision OCR fallback / mammoth / plain)
+Crawl  ─▶ Cheerio or Playwright (JS) → page text + skipped-URL list
        ─▶ chunk (overlap) ─▶ embed (MiniLM) ─▶ Qdrant (vectors) + MongoDB (text)
        ─▶ generate starter questions + extract key dates (Radar)
 ```
@@ -100,7 +104,8 @@ Ask ─▶ rewrite query ─▶ embed ─▶ Qdrant search (top-k + threshold)
 | **Database** | MongoDB + Mongoose (documents, chunks, conversations)                      |
 | **LLM**      | Ollama — chat + vision OCR (cloud or local)                                |
 | **Embeddings** | `@xenova/transformers` — `all-MiniLM-L6-v2` (384-dim, runs in-process)   |
-| **Parsing**  | `pdf-to-img` + vision OCR · `mammoth` (DOCX) · native text                 |
+| **Parsing**  | `pdf-parse` (text layer) + `pdf-to-img` vision OCR · `mammoth` (DOCX) · native text |
+| **Crawling** | `@crawlee/cheerio` (static) · `@crawlee/playwright` + Chromium (JS rendering) |
 
 ---
 
@@ -114,6 +119,12 @@ Ask ─▶ rewrite query ─▶ embed ─▶ Qdrant search (top-k + threshold)
   - **Local** Ollama (`ollama serve`) with a chat model and a vision model (e.g. `ollama pull llama3.2-vision`)
 
 > 💡 **Embeddings need no setup** — they run in-process via `transformers.js` (the model downloads automatically on first use).
+
+> 🌐 **Website crawling with JavaScript Rendering** needs a headless browser — run once after `npm install`:
+> ```bash
+> npx playwright install chromium
+> ```
+> Static-HTML crawling and file uploads work without it.
 
 ### 1️⃣ Infrastructure
 ```bash
@@ -161,6 +172,7 @@ All settings live in `backend/.env` (see `.env.example`).
 | `RETRIEVAL_TOP_K` | Chunks retrieved per query | `5` |
 | `SCORE_THRESHOLD` | Min similarity (raise = stricter) | `0.4` |
 | `MAX_UPLOAD_MB` | Max upload size | `25` |
+| `CRAWL_MAX_PAGES_CAP` | Safety cap when crawl "Max Pages" is left blank | `100` |
 
 > ⚠️ Embeddings use `all-MiniLM-L6-v2` (**384-dim**) — set `EMBED_DIM=384` so the Qdrant collection matches.
 >
@@ -174,6 +186,7 @@ All settings live in `backend/.env` (see `.env.example`).
 | Method | Route | Body / Notes |
 | --- | --- | --- |
 | `POST` | `/api/documents` | multipart, field `files` (multiple) |
+| `POST` | `/api/documents/crawl` | `{ url, maxDepth?, maxPages?, concurrency?, requestDelay?, respectRobots?, jsRendering? }` |
 | `GET` | `/api/documents` | list all documents + status |
 | `DELETE` | `/api/documents/:id` | delete doc + its vectors/chunks |
 | `GET` | `/api/documents/:id/chunks` | inspect extracted chunks |
@@ -211,8 +224,8 @@ ollama-rag/
 │   └── src/
 │       ├── config/             # env, db, qdrant, ollama clients
 │       ├── models/             # Document, Chunk, Conversation
-│       ├── services/           # ingest, document(OCR), chunking, embedding,
-│       │                       #   vector, rag, suggestion, radar (key dates)
+│       ├── services/           # ingest, document(OCR), crawl (web), chunking,
+│       │                       #   embedding, vector, rag, suggestion, radar
 │       ├── controllers/        # document, chat, conversation
 │       ├── routes/             # /documents, /chat, /conversations
 │       ├── middleware/         # upload (multer), error handler
@@ -220,8 +233,8 @@ ollama-rag/
 └── frontend/
     └── src/
         ├── components/         # Chat, MessageBubble, Sources, FileUpload,
-        │                       #   DocumentList, ConversationList,
-        │                       #   OcrDrawer, RadarDrawer, ThemeToggle
+        │                       #   WebScrape, DocumentList, ConversationList,
+        │                       #   OcrDrawer, RadarDrawer, Onboarding, ThemeToggle
         ├── api.ts              # REST + SSE client
         ├── types.ts
         └── App.tsx
@@ -233,6 +246,7 @@ ollama-rag/
 
 Ideas on deck (see `RAG_OPTIMIZATION.md` for the full 50-point checklist):
 
+- [ ] 📥 **Crawl file-type import** — download linked PDFs/DOCX/etc. (the "Skipped" files) and ingest their contents too
 - [ ] 🔗 **Clickable citations** → open & highlight the exact chunk / PDF page
 - [ ] 🔀 **Hybrid search** (dense + BM25) + **cross-encoder reranking**
 - [ ] 🟢 **Groundedness / trust badge** (answer-vs-sources self-check)

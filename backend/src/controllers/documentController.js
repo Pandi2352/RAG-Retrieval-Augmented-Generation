@@ -1,6 +1,6 @@
 import { Document } from '../models/Document.js'
 import { Chunk } from '../models/Chunk.js'
-import { ingestFile, removeDocument } from '../services/ingestService.js'
+import { ingestFile, ingestWebsite, removeDocument } from '../services/ingestService.js'
 
 // POST /api/documents  (multipart, field name: "files", multiple)
 export async function uploadDocuments(req, res, next) {
@@ -19,6 +19,32 @@ export async function uploadDocuments(req, res, next) {
       }
     }
     res.status(201).json({ results })
+  } catch (err) {
+    next(err)
+  }
+}
+
+// POST /api/documents/crawl   { url, maxDepth?, maxPages?, concurrency?, requestDelay?, respectRobots? }
+export async function crawlWebsiteDocument(req, res, next) {
+  try {
+    const { url, maxDepth, maxPages, concurrency, requestDelay, respectRobots, jsRendering } =
+      req.body || {}
+    if (!url || !/^https?:\/\//i.test(url.trim())) {
+      return res.status(400).json({ error: 'A valid http(s) URL is required' })
+    }
+    const num = (v) => (v === undefined || v === null || v === '' ? null : Number(v))
+    const doc = await ingestWebsite({
+      url: url.trim(),
+      options: {
+        maxDepth: num(maxDepth),
+        maxPages: num(maxPages),
+        concurrency: num(concurrency),
+        requestDelayMs: num(requestDelay),
+        respectRobots: respectRobots !== false,
+        jsRendering: !!jsRendering,
+      },
+    })
+    res.status(201).json({ document: doc })
   } catch (err) {
     next(err)
   }

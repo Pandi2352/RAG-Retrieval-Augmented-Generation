@@ -156,6 +156,34 @@ export function DocumentList({ documents, selected, onToggle, onDelete, onInspec
                     View Extracted OCR Text →
                   </button>
                 )}
+
+                {/* Skipped URLs (web crawls) — things not pulled into the document. */}
+                {!!doc.skippedUrls?.length && (
+                  <div className="mt-2 border-t border-slate-200/60 dark:border-slate-700 pt-2">
+                    <p className="mb-1 font-semibold text-slate-500 dark:text-slate-400">
+                      Skipped ({doc.skippedUrls.length})
+                    </p>
+                    <ul className="max-h-32 space-y-1 overflow-y-auto">
+                      {doc.skippedUrls.map((s, i) => (
+                        <li key={i} className="flex items-center justify-between gap-2">
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="truncate text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
+                            title={s.url}
+                          >
+                            {s.url}
+                          </a>
+                          <span className="flex-none rounded border border-slate-200 px-1.5 py-0.5 text-[9px] font-medium text-slate-400 dark:border-slate-700">
+                            {s.reason}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>

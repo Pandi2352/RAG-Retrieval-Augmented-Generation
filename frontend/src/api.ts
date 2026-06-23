@@ -20,6 +20,29 @@ export async function uploadDocuments(files: File[]) {
   return res.json() as Promise<{ results: { ok: boolean; filename?: string; error?: string }[] }>
 }
 
+export interface CrawlPayload {
+  url: string
+  maxDepth?: number | null
+  maxPages?: number | null
+  concurrency?: number | null
+  requestDelay?: number | null
+  respectRobots?: boolean
+  jsRendering?: boolean
+}
+
+export async function crawlWebsite(payload: CrawlPayload) {
+  const res = await fetch(`${API}/documents/crawl`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || 'Crawl failed')
+  }
+  return res.json()
+}
+
 export async function deleteDocument(id: string) {
   const res = await fetch(`${API}/documents/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Delete failed')
